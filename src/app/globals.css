@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Tony System Design — dark "technical" theme, lime accent (brand tony-*) */
+:root {
+  --bg: #0b0e0f;
+  --bg-elev: #11161a;
+  --bg-panel: #161c21;
+  --border: #232c33;
+  --border-strong: #2f3b44;
+  --fg: #e6edf3;
+  --fg-muted: #8b98a5;
+  --accent: #d4ff40;
+  --accent-dim: #7fae00;
+  --accent-soft: #1c2600;
+  --danger: #ff5b5b;
+  --warn: #ffb020;
+  --info: #38bdf8;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-bg-panel: var(--bg-panel);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar for panels */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
+}
+
+/* Konva canvas container should not show default text selection */
+.kanvas-host {
+  background:
+    radial-gradient(circle at 1px 1px, #1b232a 1px, transparent 0);
+  background-size: 22px 22px;
+  background-color: var(--bg);
+}
