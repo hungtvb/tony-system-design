@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import { Stage, Layer, Rect, Text, Line, Circle, Group } from "react-konva";
 import type Konva from "konva";
 import { useCanvasStore } from "@/store/canvasStore";
@@ -13,10 +13,11 @@ const NODE_H = 64;
 interface Props {
   width: number;
   height: number;
+  onStageReady?: (stage: Konva.Stage | null) => void;
 }
 
 const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
-  { width, height },
+  { width, height, onStageReady },
   ref,
 ) {
   const doc = useCanvasStore((s) => s.doc);
@@ -27,6 +28,19 @@ const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
   const moveNode = useCanvasStore((s) => s.moveNode);
   const addEdge = useCanvasStore((s) => s.addEdge);
   const connectingFrom = useCanvasStore((s) => s.connectingFrom);
+  const innerRef = useRef<Konva.Stage | null>(null);
+
+  useEffect(() => {
+    onStageReady?.(innerRef.current);
+    return () => onStageReady?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function setStage(node: Konva.Stage | null) {
+    innerRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) ref.current = node;
+  }
 
   const nodeById = new Map<string, TCanvasNode>(doc.nodes.map((n) => [n.id, n]));
 
@@ -43,7 +57,7 @@ const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
 
   return (
     <Stage
-      ref={ref}
+      ref={setStage}
       width={width}
       height={height}
       onMouseDown={handleStageClick}

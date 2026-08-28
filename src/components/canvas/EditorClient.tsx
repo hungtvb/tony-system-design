@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useCanvasStore } from "@/store/canvasStore";
 import Palette from "@/components/canvas/Palette";
 import PropertiesPanel from "@/components/canvas/PropertiesPanel";
-import CanvasStage from "@/components/canvas/CanvasStage";
-import Konva from "konva";
+import { validateDesign } from "@/lib/engine/validation";
+import type Konva from "konva";
+import type { CanvasDocument, Severity, ValidationFinding } from "@/lib/types";
+
+const CanvasStage = dynamic(
+  () => import("@/components/canvas/CanvasStage"),
+  { ssr: false },
+);
 
 interface Props {
   designId: string | null;
-  initialDoc: {
-    nodes: any[];
-    edges: any[];
-    meta: { name: string };
-  } | null;
+  initialDoc: CanvasDocument | null;
 }
 
 export default function EditorClient({ designId, initialDoc }: Props) {
@@ -29,11 +32,17 @@ export default function EditorClient({ designId, initialDoc }: Props) {
   const revision = useCanvasStore((s) => s.revision);
   const connectingFrom = useCanvasStore((s) => s.connectingFrom);
   const setConnecting = useCanvasStore((s) => s.setConnecting);
+  const [showFindings, setShowFindings] = useState(false);
 
+  const validation = useMemo(() => {
+    if (!showFindings) return null;
+    return validateDesign(doc);
+  }, [doc, showFindings]);
+
+  // load initial doc once (title already seeded from useState initializer)
   useEffect(() => {
     if (initialDoc) {
-      loadDoc(initialDoc as any);
-      setTitle(initialDoc.meta.name);
+      loadDoc(initialDoc);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -58,16 +67,6 @@ export default function EditorClient({ designId, initialDoc }: Props) {
   }, [setConnecting]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (revision === 0) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void doSave(), 1500);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision]);
-
   const doSave = useCallback(async () => {
     setSaveState("saving");
     const payload = {
@@ -106,6 +105,16 @@ export default function EditorClient({ designId, initialDoc }: Props) {
     }
   }, [doc, title, savedId]);
 
+  useEffect(() => {
+    if (revision === 0) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void doSave(), 1500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision]);
+
   function exportPng() {
     if (!stageRef.current) return;
     const uri = stageRef.current.toDataURL({ pixelRatio: 2 });
@@ -139,6 +148,21 @@ export default function EditorClient({ designId, initialDoc }: Props) {
             </span>
           )}
           <button
+            onClick={() => setShowFindings((v) => !v)}
+            className={`rounded-md border px-3 py-1.5 text-sm transition hover:border-accent-dim ${
+              showFindings
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border text-fg"
+            }`}
+          >
+            Kiểm tra
+            {validation && !validation.ok && (
+              <span className="ml-1 rounded bg-danger/20 px-1 text-danger">
+                {validation.errorCount}
+              </span>
+            )}
+          </button>
+          <button
             onClick={exportPng}
             className="rounded-md border border-border px-3 py-1.5 text-sm text-fg transition hover:border-accent-dim"
           >
@@ -156,9 +180,95 @@ export default function EditorClient({ designId, initialDoc }: Props) {
       <div className="flex min-h-0 flex-1">
         <Palette />
         <div ref={containerRef} className="relative min-w-0 flex-1">
-          <CanvasStage ref={stageRef} width={size.w} height={size.h} />
+          <CanvasStage
+            onStageReady={(stage) => (stageRef.current = stage)}
+            width={size.w}
+            height={size.h}
+          />
+          {showFindings && validation && (
+            <ValidationPanel
+              findings={validation.findings}
+              onClose={() => setShowFindings(false)}
+              onSelect={(id) => useCanvasStore.getState().selectNode(id)}
+            />
+          )}
         </div>
         <PropertiesPanel />
+      </div>
+    </div>
+  );
+}
+
+const SEVERITY_STYLE: Record<Severity, { dot: string; text: string; label: string }> = {
+  error: { dot: "bg-danger", text: "text-danger", label: "Lỗi" },
+  warn: { dot: "bg-warn", text: "text-warn", label: "Cảnh báo" },
+  info: { dot: "bg-info", text: "text-info", label: "Ghi chú" },
+};
+
+function ValidationPanel({
+  findings,
+  onClose,
+  onSelect,
+}: {
+  findings: ValidationFinding[];
+  onClose: () => void;
+  onSelect: (nodeId: string) => void;
+}) {
+  const errors = findings.filter((f) => f.severity === "error").length;
+  const warns = findings.filter((f) => f.severity === "warn").length;
+  const infos = findings.filter((f) => f.severity === "info").length;
+  const summary =
+    errors === 0 && warns === 0 && infos === 0
+      ? "Thiết kế ổn — không có vấn đề."
+      : `${errors} lỗi · ${warns} cảnh báo · ${infos} ghi chú`;
+
+  return (
+    <div className="absolute bottom-4 right-4 z-10 flex max-h-[60%] w-80 flex-col rounded-lg border border-border bg-bg-panel/95 shadow-xl backdrop-blur">
+      <header className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="text-sm font-semibold text-fg">Kết quả kiểm tra</div>
+        <button
+          onClick={onClose}
+          className="rounded px-1.5 text-fg-muted transition hover:text-fg"
+          aria-label="Đóng"
+        >
+          ✕
+        </button>
+      </header>
+      <div className="border-b border-border px-3 py-1.5 text-xs text-fg-muted">
+        {summary}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {findings.length === 0 ? (
+          <div className="px-1 py-3 text-center text-xs text-fg-muted">
+            🎉 Không có vấn đề gì.
+          </div>
+        ) : (
+          findings.map((f, i) => {
+            const st = SEVERITY_STYLE[f.severity];
+            return (
+              <button
+                key={`${f.ruleId}-${i}`}
+                onClick={() => f.nodeIds[0] && onSelect(f.nodeIds[0])}
+                className="mb-1.5 block w-full rounded-md border border-border bg-bg-elev px-2.5 py-2 text-left transition hover:border-accent-dim"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${st.dot}`} />
+                  <span className={`text-xs font-semibold ${st.text}`}>
+                    {st.label}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs leading-snug text-fg">
+                  {f.message}
+                </div>
+                {f.hint && (
+                  <div className="mt-1 text-[11px] leading-snug text-fg-muted">
+                    💡 {f.hint}
+                  </div>
+                )}
+              </button>
+            );
+          })
+        )}
       </div>
     </div>
   );
