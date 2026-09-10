@@ -7,6 +7,7 @@ import Palette from "@/components/canvas/Palette";
 import PropertiesPanel from "@/components/canvas/PropertiesPanel";
 import { validateDesign } from "@/lib/engine/validation";
 import ExportPanel from "@/components/canvas/ExportPanel";
+import SimulationPanel from "@/components/canvas/SimulationPanel";
 import type Konva from "konva";
 import type { CanvasDocument, Severity, ValidationFinding } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export default function EditorClient({ designId, initialDoc }: Props) {
   const connectingFrom = useCanvasStore((s) => s.connectingFrom);
   const setConnecting = useCanvasStore((s) => s.setConnecting);
   const [showFindings, setShowFindings] = useState(false);
+  const [showSim, setShowSim] = useState(false);
 
   const validation = useMemo(() => {
     if (!showFindings) return null;
@@ -163,6 +165,16 @@ export default function EditorClient({ designId, initialDoc }: Props) {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setShowSim((v) => !v)}
+            className={`rounded-md border px-3 py-1.5 text-sm transition hover:border-accent-dim ${
+              showSim
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border text-fg"
+            }`}
+          >
+            Mô phỏng
+          </button>
           <ExportPanel
             title={title}
             getDoc={() => ({ nodes: doc.nodes, edges: doc.edges, meta: { ...doc.meta, name: title } })}
@@ -190,6 +202,12 @@ export default function EditorClient({ designId, initialDoc }: Props) {
               findings={validation.findings}
               onClose={() => setShowFindings(false)}
               onSelect={(id) => useCanvasStore.getState().selectNode(id)}
+            />
+          )}
+          {showSim && (
+            <SimulationPanel
+              designId={savedId}
+              onClose={() => setShowSim(false)}
             />
           )}
         </div>
