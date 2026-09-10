@@ -40,6 +40,12 @@ export default async function HomePage() {
         </div>
         <div className="flex items-center gap-3">
           <Link
+            href="/quiz"
+            className="rounded-md border border-border px-4 py-2 text-sm text-fg transition hover:border-accent-dim"
+          >
+            Luyện tập
+          </Link>
+          <Link
             href="/editor"
             className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110"
           >
