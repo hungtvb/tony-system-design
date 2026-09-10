@@ -6,6 +6,8 @@ import { useCanvasStore } from "@/store/canvasStore";
 import Palette from "@/components/canvas/Palette";
 import PropertiesPanel from "@/components/canvas/PropertiesPanel";
 import { validateDesign } from "@/lib/engine/validation";
+import { toMermaid } from "@/lib/export/mermaid";
+import { toSkillMd } from "@/lib/export/skillmd";
 import type Konva from "konva";
 import type { CanvasDocument, Severity, ValidationFinding } from "@/lib/types";
 
@@ -124,6 +126,16 @@ export default function EditorClient({ designId, initialDoc }: Props) {
     a.click();
   }
 
+  function downloadText(text: string, filename: string, mime: string) {
+    const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-border bg-bg-panel px-4 py-2">
@@ -167,6 +179,30 @@ export default function EditorClient({ designId, initialDoc }: Props) {
             className="rounded-md border border-border px-3 py-1.5 text-sm text-fg transition hover:border-accent-dim"
           >
             Export PNG
+          </button>
+          <button
+            onClick={() =>
+              downloadText(
+                toMermaid({ nodes: doc.nodes, edges: doc.edges, meta: { ...doc.meta, name: title } }),
+                `${title || "design"}.mmd`,
+                "text/plain",
+              )
+            }
+            className="rounded-md border border-border px-3 py-1.5 text-sm text-fg transition hover:border-accent-dim"
+          >
+            Mermaid
+          </button>
+          <button
+            onClick={() =>
+              downloadText(
+                toSkillMd({ nodes: doc.nodes, edges: doc.edges, meta: { ...doc.meta, name: title } }),
+                `${title || "design"}.SKILL.md`,
+                "text/markdown",
+              )
+            }
+            className="rounded-md border border-border px-3 py-1.5 text-sm text-fg transition hover:border-accent-dim"
+          >
+            SKILL.md
           </button>
           <button
             onClick={() => void doSave()}
