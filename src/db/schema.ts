@@ -104,6 +104,7 @@ export const designs = pgTable(
     status: designStatusEnum("status").notNull().default("draft"),
     canvasData: jsonb("canvas_data").notNull(),
     isPublic: boolean("is_public").notNull().default(false),
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },

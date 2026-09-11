@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   findDesignById,
-  updateDesignOwned,
+  updateDesignOwnedVersioned,
   deleteDesignOwned,
   type DesignUpdate,
 } from "@/lib/designs";
@@ -59,6 +59,7 @@ export async function PUT(req: Request, { params }: Params) {
     canvasData?: unknown;
     status?: unknown;
     isPublic?: unknown;
+    expectedVersion?: unknown;
   };
   try {
     body = JSON.parse(rawText || "{}");
@@ -102,10 +103,27 @@ export async function PUT(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
-  // Single ownership-scoped mutation (Issue #1 + #8): no separate auth read,
-  // no 200-with-undefined. Distinguish 404 vs 403 via a follow-up read.
-  const updated = await updateDesignOwned(id, userId, update);
-  if (!updated) {
+  // Single ownership-scoped + version-checked mutation (Issue #1 + #3 + #8).
+  // expectedVersion omitted/undefined = legacy path (no version check).
+  const expectedVersion =
+    body.expectedVersion === undefined
+      ? undefined
+      : typeof body.expectedVersion === "number" &&
+          Number.isInteger(body.expectedVersion) &&
+          body.expectedVersion >= 1
+        ? body.expectedVersion
+        : -1;
+  if (expectedVersion === -1) {
+    return NextResponse.json({ error: "Invalid expectedVersion" }, { status: 400 });
+  }
+  const result = await updateDesignOwnedVersioned(id, userId, update, expectedVersion);
+  if (result.status === "stale") {
+    return NextResponse.json(
+      { error: "Conflict: design was modified elsewhere", currentVersion: result.currentVersion },
+      { status: 409 },
+    );
+  }
+  if (result.status === "missing") {
     const existing = await findDesignById(id);
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -113,7 +131,7 @@ export async function PUT(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ design: updated });
+  return NextResponse.json({ design: result.design });
 }
 
 export async function DELETE(_req: Request, { params }: Params) {

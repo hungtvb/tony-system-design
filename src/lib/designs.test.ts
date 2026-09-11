@@ -4,6 +4,7 @@ import { designs, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import {
   updateDesignOwned,
+  updateDesignOwnedVersioned,
   deleteDesignOwned,
   findDesignById,
 } from "./designs";
@@ -108,5 +109,46 @@ describe.skipIf(SKIP_DB)("ownership-scoped design mutations", () => {
     const res = await deleteDesignOwned(d.id, userA);
     expect(res?.id).toBe(d.id);
     expect(await findDesignById(d.id)).toBeNull();
+  });
+
+  it("stale versioned write is rejected, newer state survives (Issue #3)", async () => {
+    const [d] = await db
+      .insert(designs)
+      .values({
+        userId: userA,
+        title: "race",
+        canvasData: { nodes: [], edges: [], meta: { name: "race" } },
+      })
+      .returning({ id: designs.id });
+    createdDesignIds.push(d.id);
+    const v1 = (await findDesignById(d.id))!.version;
+
+    // Writer B (fresh version) wins first
+    const win = await updateDesignOwnedVersioned(d.id, userA, { title: "B wins" }, v1);
+    expect(win.status).toBe("ok");
+
+    // Writer A (stale version v1) must NOT overwrite B
+    const stale = await updateDesignOwnedVersioned(d.id, userA, { title: "A stale" }, v1);
+    expect(stale.status).toBe("stale");
+    if (stale.status === "stale") {
+      expect(stale.currentVersion).toBe(v1 + 1);
+    }
+    expect((await findDesignById(d.id))?.title).toBe("B wins");
+
+    // Retry with the fresh version succeeds and bumps again
+    const retry = await updateDesignOwnedVersioned(
+      d.id, userA, { title: "A retry" }, v1 + 1,
+    );
+    expect(retry.status).toBe("ok");
+    if (retry.status === "ok") {
+      expect(retry.design.version).toBe(v1 + 2);
+    }
+  });
+
+  it("versioned write without expectedVersion falls back to plain update", async () => {
+    const res = await updateDesignOwnedVersioned(
+      designId, userA, { title: "no-version-check" }, undefined,
+    );
+    expect(res.status).toBe("ok");
   });
 });

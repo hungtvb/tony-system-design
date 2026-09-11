@@ -19,15 +19,20 @@ const CanvasStage = dynamic(
 interface Props {
   designId: string | null;
   initialDoc: CanvasDocument | null;
+  initialVersion?: number | null;
 }
 
-export default function EditorClient({ designId, initialDoc }: Props) {
+export default function EditorClient({ designId, initialDoc, initialVersion }: Props) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [title, setTitle] = useState(initialDoc?.meta.name ?? "Untitled design");
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "conflict">("idle");
   const [savedId, setSavedId] = useState<string | null>(designId);
+  const versionRef = useRef<number | null>(initialVersion ?? null);
+  const saveSeq = useRef(0);
+  const saveInFlight = useRef(false);
+  const saveQueued = useRef(false);
 
   const loadDoc = useCanvasStore((s) => s.loadDoc);
   const doc = useCanvasStore((s) => s.doc);
@@ -69,9 +74,18 @@ export default function EditorClient({ designId, initialDoc }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [setConnecting]);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Serialized save with optimistic concurrency (Issue #3):
+  // - no overlapping PUTs (queue instead of parallel)
+  // - stale responses (older seq) never flip UI to "saved"
+  // - 409 conflict surfaces a reload prompt instead of silent overwrite
   const doSave = useCallback(async () => {
+    if (saveInFlight.current) {
+      saveQueued.current = true;
+      return;
+    }
+    saveInFlight.current = true;
     setSaveState("saving");
+    const seq = ++saveSeq.current;
     const payload = {
       title,
       canvasData: {
@@ -79,6 +93,7 @@ export default function EditorClient({ designId, initialDoc }: Props) {
         edges: doc.edges,
         meta: { ...doc.meta, name: title },
       },
+      ...(versionRef.current != null ? { expectedVersion: versionRef.current } : {}),
     };
     try {
       let res: Response;
@@ -95,19 +110,36 @@ export default function EditorClient({ designId, initialDoc }: Props) {
           body: JSON.stringify(payload),
         });
       }
+      if (seq !== saveSeq.current) return; // superseded by a newer save
       if (res.ok) {
         const data = await res.json();
         if (data.design?.id) setSavedId(data.design.id);
+        if (typeof data.design?.version === "number") {
+          versionRef.current = data.design.version;
+        }
         setSaveState("saved");
         setTimeout(() => setSaveState("idle"), 1500);
+      } else if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        if (typeof data.currentVersion === "number") {
+          versionRef.current = data.currentVersion;
+        }
+        setSaveState("conflict");
       } else {
         setSaveState("idle");
       }
     } catch {
-      setSaveState("idle");
+      if (seq === saveSeq.current) setSaveState("idle");
+    } finally {
+      saveInFlight.current = false;
+      if (saveQueued.current) {
+        saveQueued.current = false;
+        void doSave();
+      }
     }
   }, [doc, title, savedId]);
 
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (revision === 0) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -141,8 +173,18 @@ export default function EditorClient({ designId, initialDoc }: Props) {
               ? "Đang lưu…"
               : saveState === "saved"
                 ? "Đã lưu"
-                : ""}
+                : saveState === "conflict"
+                  ? "Xung đột — hãy tải lại"
+                  : ""}
           </span>
+          {saveState === "conflict" && (
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded bg-danger/20 px-2 py-1 text-xs text-danger transition hover:bg-danger/30"
+            >
+              Tải lại
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {connectingFrom && (
