@@ -28,6 +28,7 @@ const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
   const moveNode = useCanvasStore((s) => s.moveNode);
   const addEdge = useCanvasStore((s) => s.addEdge);
   const connectingFrom = useCanvasStore((s) => s.connectingFrom);
+  const setConnecting = useCanvasStore((s) => s.setConnecting);
   const innerRef = useRef<Konva.Stage | null>(null);
 
   useEffect(() => {
@@ -53,6 +54,21 @@ const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
       selectNode(null);
       selectEdge(null);
     }
+  }
+
+  function handleNodeActivate(nodeId: string) {
+    const current = useCanvasStore.getState().connectingFrom;
+    if (current && current !== nodeId) {
+      addEdge(current, nodeId);
+      setConnecting(null);
+      return;
+    }
+    if (current === nodeId) {
+      setConnecting(null);
+      selectNode(nodeId);
+      return;
+    }
+    selectNode(nodeId);
   }
 
   return (
@@ -104,15 +120,8 @@ const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
                 shadowOpacity={0.5}
                 draggable
                 onDragEnd={(e) => moveNode(n.id, e.target.x(), e.target.y())}
-                onClick={() => {
-                  if (connectingFrom && connectingFrom !== n.id) {
-                    addEdge(connectingFrom, n.id);
-                    useCanvasStore.getState().setConnecting(null);
-                  } else {
-                    selectNode(n.id);
-                  }
-                }}
-                onTap={() => selectNode(n.id)}
+                onClick={() => handleNodeActivate(n.id)}
+                onTap={() => handleNodeActivate(n.id)}
               />
               <Rect
                 x={n.x}
@@ -150,7 +159,11 @@ const CanvasStage = forwardRef<Konva.Stage, Props>(function CanvasStage(
                 strokeWidth={2}
                 onClick={(e) => {
                   e.cancelBubble = true;
-                  useCanvasStore.getState().setConnecting(n.id);
+                  setConnecting(n.id);
+                }}
+                onTap={(e) => {
+                  e.cancelBubble = true;
+                  setConnecting(n.id);
                 }}
                 onMouseEnter={(e) => {
                   const stage = e.target.getStage();
