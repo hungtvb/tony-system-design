@@ -7,6 +7,7 @@ import {
   updateDesignOwnedVersioned,
   deleteDesignOwned,
   findDesignById,
+  getPublicDesign,
 } from "./designs";
 
 /**
@@ -150,5 +151,26 @@ describe.skipIf(SKIP_DB)("ownership-scoped design mutations", () => {
       designId, userA, { title: "no-version-check" }, undefined,
     );
     expect(res.status).toBe("ok");
+  });
+
+  it("public contract (Issue #7): only isPublic=true rows readable, no userId leaked", async () => {
+    // private design (default isPublic=false) → null
+    const priv = await getPublicDesign(designId);
+    expect(priv).toBeNull();
+
+    // flip to public → readable, limited projection
+    await updateDesignOwned(designId, userA, { isPublic: true });
+    const pub = await getPublicDesign(designId);
+    expect(pub).not.toBeNull();
+    expect(pub?.id).toBe(designId);
+    expect(pub).not.toHaveProperty("userId");
+    expect(pub).not.toHaveProperty("isPublic");
+
+    // flip back → null again
+    await updateDesignOwned(designId, userA, { isPublic: false });
+    expect(await getPublicDesign(designId)).toBeNull();
+
+    // missing id → null (same as private: no existence oracle)
+    expect(await getPublicDesign("00000000-0000-0000-0000-000000000000")).toBeNull();
   });
 });

@@ -99,3 +99,34 @@ export async function deleteDesignOwned(id: string, userId: string) {
     .returning({ id: designs.id });
   return deleted ?? null;
 }
+
+/**
+ * Public-share contract (Issue #7).
+ *
+ * Semantics of `isPublic`:
+ * - `false` (default): only the owner can read the design (auth required).
+ * - `true`: anyone (no login) can read a LIMITED field set via
+ *   `GET /api/public/designs/[id]` and the `/share/[id]` page.
+ *
+ * The public projection deliberately EXCLUDES owner identity (userId) and
+ * only exposes content the owner chose to publish. Private or missing ids
+ * both resolve to null so callers return 404 without an existence oracle.
+ * Mutation (PUT/DELETE, incl. flipping isPublic) stays owner-only.
+ */
+export const publicDesignColumns = {
+  id: designs.id,
+  title: designs.title,
+  description: designs.description,
+  status: designs.status,
+  canvasData: designs.canvasData,
+  updatedAt: designs.updatedAt,
+};
+
+export async function getPublicDesign(id: string) {
+  const [d] = await db
+    .select(publicDesignColumns)
+    .from(designs)
+    .where(and(eq(designs.id, id), eq(designs.isPublic, true)))
+    .limit(1);
+  return d ?? null;
+}

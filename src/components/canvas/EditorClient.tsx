@@ -20,9 +20,13 @@ interface Props {
   designId: string | null;
   initialDoc: CanvasDocument | null;
   initialVersion?: number | null;
+  initialIsPublic?: boolean | null;
 }
 
-export default function EditorClient({ designId, initialDoc, initialVersion }: Props) {
+export default function EditorClient({ designId, initialDoc, initialVersion, initialIsPublic }: Props) {
+  const [isPublic, setIsPublic] = useState<boolean>(initialIsPublic ?? false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -159,6 +163,52 @@ export default function EditorClient({ designId, initialDoc, initialVersion }: P
     a.click();
   }
 
+  // Owner-only share toggle (Issue #7). Persists via versioned PUT, then
+  // copies the canonical /share/[id] URL when turning public on.
+  async function toggleShare() {
+    if (!savedId || shareBusy) return;
+    setShareBusy(true);
+    setShareMsg(null);
+    try {
+      const res = await fetch(`/api/designs/${savedId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isPublic: !isPublic,
+          ...(versionRef.current != null ? { expectedVersion: versionRef.current } : {}),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const next = Boolean(data.design?.isPublic);
+        setIsPublic(next);
+        if (typeof data.design?.version === "number") {
+          versionRef.current = data.design.version;
+        }
+        if (next) {
+          const url = `${window.location.origin}/share/${savedId}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            setShareMsg("Đã bật chia sẻ — link đã chép");
+          } catch {
+            setShareMsg(`Link chia sẻ: ${url}`);
+          }
+        } else {
+          setShareMsg("Đã tắt chia sẻ");
+        }
+        setTimeout(() => setShareMsg(null), 4000);
+      } else if (res.status === 409) {
+        setShareMsg("Xung đột — hãy tải lại rồi thử lại");
+      } else {
+        setShareMsg("Không đổi được trạng thái chia sẻ");
+      }
+    } catch {
+      setShareMsg("Không đổi được trạng thái chia sẻ");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-border bg-bg-panel px-4 py-2">
@@ -184,6 +234,11 @@ export default function EditorClient({ designId, initialDoc, initialVersion }: P
             >
               Tải lại
             </button>
+          )}
+          {shareMsg && (
+            <span className="max-w-64 truncate text-xs text-accent" title={shareMsg}>
+              {shareMsg}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -227,6 +282,18 @@ export default function EditorClient({ designId, initialDoc, initialVersion }: P
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-black transition hover:brightness-110"
           >
             Lưu
+          </button>
+          <button
+            onClick={() => void toggleShare()}
+            disabled={!savedId || shareBusy}
+            title={savedId ? (isPublic ? "Đang công khai — bấm để tắt" : "Đang riêng tư — bấm để chia sẻ") : "Lưu thiết kế trước khi chia sẻ"}
+            className={`rounded-md border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 hover:border-accent-dim ${
+              isPublic
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border text-fg"
+            }`}
+          >
+            {isPublic ? "Công khai" : "Chia sẻ"}
           </button>
         </div>
       </header>

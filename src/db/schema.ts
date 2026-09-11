@@ -78,6 +78,23 @@ export const verificationTokens = pgTable(
   ],
 );
 
+/**
+ * Sliding-window auth attempt log (Issue #4).
+ * Each row = one register/login attempt for a throttle key
+ * (`register:ip:<ip>`, `login:ip:<ip>`, `login:email:<addr>`).
+ * Rows older than the largest window are pruned on check.
+ * DB-backed so limits hold across multiple app instances.
+ */
+export const authAttempts = pgTable(
+  "auth_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    key: varchar("key", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("auth_attempts_key_idx").on(t.key)],
+);
+
 /** Status of a saved design. */
 export const designStatusEnum = pgEnum("design_status", [
   "draft",

@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { checkRateLimit, getClientIpFromHeaders, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db),
@@ -19,10 +20,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = String(credentials?.email ?? "").toLowerCase().trim();
         const password = String(credentials?.password ?? "");
         if (!email || !password) return null;
+
+        // Issue #4: throttle by account + IP before bcrypt. The IP is read
+        // from proxy headers when present; authorize() receives the raw
+        // Request as 2nd arg in Auth.js v5.
+        const ip = getClientIpFromHeaders(req?.headers as unknown as { get(name: string): string | null } | undefined);
+        const [byEmail, byIp] = await Promise.all([
+          checkRateLimit(`login:email:${email.slice(0, 120)}`, RATE_LIMITS.loginByEmail),
+          checkRateLimit(`login:ip:${ip}`, RATE_LIMITS.loginByIp),
+        ]);
+        // Same null return whether throttled or bad credentials: no
+        // user-enumeration oracle, no hint that throttling kicked in.
+        if (!byEmail.allowed || !byIp.allowed) return null;
 
         const [user] = await db
           .select()

@@ -34,6 +34,7 @@ export default async function EditEditorPage({ params }: Params) {
     <EditorClient
       designId={design.id}
       initialVersion={design.version}
+      initialIsPublic={design.isPublic}
       initialDoc={{
         nodes: canvasData.nodes ?? [],
         edges: canvasData.edges ?? [],
