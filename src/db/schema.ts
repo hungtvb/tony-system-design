@@ -9,6 +9,7 @@ import {
   timestamp,
   jsonb,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -44,12 +45,10 @@ export const accounts = pgTable(
     session_state: varchar("session_state", { length: 255 }),
   },
   (account) => [
-    {
-      compoundKey: index("account_compound_key").on(
-        account.provider,
-        account.providerAccountId,
-      ),
-    },
+    primaryKey({
+      name: "account_compound_key",
+      columns: [account.provider, account.providerAccountId],
+    }),
   ],
 );
 
@@ -69,12 +68,10 @@ export const verificationTokens = pgTable(
     expires: timestamp("expires", { mode: "date" }).notNull(),
   },
   (vt) => [
-    {
-      compoundKey: index("verification_token_compound_key").on(
-        vt.identifier,
-        vt.token,
-      ),
-    },
+    primaryKey({
+      name: "verification_token_compound_key",
+      columns: [vt.identifier, vt.token],
+    }),
   ],
 );
 
