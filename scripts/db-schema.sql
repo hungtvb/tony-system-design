@@ -1,5 +1,7 @@
 -- Manual schema for tony-system-design (Postgres).
--- Equivalent to src/db/schema.ts; applied when drizzle-kit push can't run non-interactively.
+-- Canonical provisioning contract aligned with src/db/schema.ts.
+-- For an existing database, use Drizzle migrations/push rather than re-running
+-- CREATE TABLE IF NOT EXISTS as a migration mechanism.
 
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -23,7 +25,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   scope varchar(255),
   id_token text,
   session_state varchar(255),
-  PRIMARY KEY ("provider", "providerAccountId")
+  CONSTRAINT account_compound_key PRIMARY KEY (provider, "providerAccountId")
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -36,10 +38,17 @@ CREATE TABLE IF NOT EXISTS verification_tokens (
   identifier varchar(255) NOT NULL,
   token varchar(255) NOT NULL,
   expires timestamp with time zone NOT NULL,
-  PRIMARY KEY (identifier, token)
+  CONSTRAINT verification_token_compound_key PRIMARY KEY (identifier, token)
 );
 
 CREATE TYPE design_status AS ENUM ('draft', 'published');
+
+CREATE TABLE IF NOT EXISTS auth_attempts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key varchar(255) NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS auth_attempts_key_idx ON auth_attempts(key);
 
 CREATE TABLE IF NOT EXISTS designs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -49,6 +58,7 @@ CREATE TABLE IF NOT EXISTS designs (
   status design_status NOT NULL DEFAULT 'draft',
   canvas_data jsonb NOT NULL,
   is_public boolean NOT NULL DEFAULT false,
+  version integer NOT NULL DEFAULT 1,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -75,3 +85,4 @@ CREATE TABLE IF NOT EXISTS quiz_problems (
   difficulty varchar(16) NOT NULL DEFAULT 'medium',
   created_at timestamp with time zone NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS quiz_slug_idx ON quiz_problems(slug);
