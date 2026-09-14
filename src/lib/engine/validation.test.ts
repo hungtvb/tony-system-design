@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { validateDesign } from "./validation";
-import type { CanvasDocument } from "@/lib/types";
+import type { BlockTypeId, CanvasDocument, CanvasEdge, CanvasNode } from "@/lib/types";
 
-function node(id: string, type: any, config?: Record<string, unknown>) {
+function node(id: string, type: BlockTypeId, config?: Record<string, unknown>): CanvasNode {
   return { id, type, x: 0, y: 0, label: type, config };
 }
-function edge(source: string, target: string) {
+function edge(source: string, target: string): CanvasEdge {
   return { id: `e_${source}_${target}`, source, target };
 }
 
-function doc(nodes: any[], edges: any[]): CanvasDocument {
+function doc(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasDocument {
   return { nodes, edges, meta: { name: "test" } };
 }
 
@@ -32,7 +32,7 @@ describe("validateDesign", () => {
     const d = doc([node("st", "objectStorage", { replicas: 1 })], []);
     const r = validateDesign(d);
     expect(r.findings.some((f) => f.ruleId === "stateful-low-replica")).toBe(true);
-    expect(r.ok).toBe(true); // warn, not error
+    expect(r.ok).toBe(true);
   });
 
   it("detects a cycle of 3 nodes", () => {
@@ -89,7 +89,7 @@ describe("validateDesign", () => {
   it("reports disconnected components as info", () => {
     const d = doc(
       [node("c", "client"), node("lb", "loadBalancer", { replicas: 2 }), node("ws", "webService", { replicas: 3 }), node("db", "relationalDb", { replicas: 3 })],
-      [edge("c", "lb"), edge("lb", "ws")], // db is isolated
+      [edge("c", "lb"), edge("lb", "ws")],
     );
     const r = validateDesign(d);
     expect(r.findings.some((f) => f.ruleId === "disconnected-graph")).toBe(true);
