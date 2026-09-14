@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { designs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import EditorClient from "@/components/canvas/EditorClient";
+import type { CanvasDocument } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function EditEditorPage({ params }: Params) {
     nodes: [],
     edges: [],
     meta: { name: design.title },
-  }) as any;
+  }) as CanvasDocument;
 
   return (
     <EditorClient
