@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { toMermaid } from "./mermaid";
 import { toSkillMd } from "./skillmd";
-import type { CanvasDocument } from "@/lib/types";
+import type { BlockTypeId, CanvasDocument, CanvasEdge, CanvasNode } from "@/lib/types";
 
-function node(id: string, type: any, label?: string) {
+function node(id: string, type: BlockTypeId, label?: string): CanvasNode {
   return { id, type, x: 0, y: 0, label: label ?? type, config: { replicas: 2 } };
 }
-function edge(source: string, target: string) {
+function edge(source: string, target: string): CanvasEdge {
   return { id: `e_${source}_${target}`, source, target };
 }
-function doc(nodes: any[], edges: any[], name = "Test Design"): CanvasDocument {
+function doc(nodes: CanvasNode[], edges: CanvasEdge[], name = "Test Design"): CanvasDocument {
   return { nodes, edges, meta: { name } };
 }
 
@@ -76,7 +76,7 @@ describe("toSkillMd", () => {
   });
 
   it("includes SPOF finding for single-replica db", () => {
-    const n = { id: "db", type: "relationalDb", x: 0, y: 0, label: "DB", config: { replicas: 1 } };
+    const n: CanvasNode = { id: "db", type: "relationalDb", x: 0, y: 0, label: "DB", config: { replicas: 1 } };
     const d = doc([n], []);
     const out = toSkillMd(d);
     expect(out).toContain("SPOF");

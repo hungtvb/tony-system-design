@@ -6,10 +6,13 @@ import type { BlockTypeId } from "@/lib/types";
 
 export default function Palette() {
   const addNode = useCanvasStore((s) => s.addNode);
+  const nodeCount = useCanvasStore((s) => s.doc.nodes.length);
 
   function add(type: BlockTypeId) {
-    // place near a readable spot; the editor centers it
-    addNode(type, 80 + Math.random() * 240, 80 + Math.random() * 200);
+    // Place new nodes in a deterministic grid so render remains pure.
+    const column = nodeCount % 3;
+    const row = Math.floor(nodeCount / 3);
+    addNode(type, 80 + column * 120, 80 + row * 100);
   }
 
   return (
