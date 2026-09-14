@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { gradeDesign, listProblems, QUIZ_PROBLEMS } from "./quiz";
-import type { CanvasDocument } from "@/lib/types";
+import type { BlockTypeId, CanvasDocument, CanvasEdge, CanvasNode } from "@/lib/types";
 
-function node(id: string, type: any, config?: Record<string, unknown>) {
+function node(id: string, type: BlockTypeId, config?: Record<string, unknown>): CanvasNode {
   return { id, type, x: 0, y: 0, label: type, config };
 }
-function edge(source: string, target: string) {
+function edge(source: string, target: string): CanvasEdge {
   return { id: `e_${source}_${target}`, source, target };
 }
-function doc(nodes: any[], edges: any[]): CanvasDocument {
+function doc(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasDocument {
   return { nodes, edges, meta: { name: "test" } };
 }
 
@@ -98,7 +98,6 @@ describe("quiz engine", () => {
       [edge("c", "gw"), edge("gw", "ws")],
     );
     const r = gradeDesign(d, "rate-limited-api");
-    // 4/5 checks pass -> 80, still passes threshold but not perfect
     expect(r.score).toBe(80);
     const rl = r.checks.find((c) => c.label.includes("Rate Limiter"));
     expect(rl?.passed).toBe(false);
